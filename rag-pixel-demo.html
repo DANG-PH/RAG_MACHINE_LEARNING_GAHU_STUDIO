@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAG — Region Adjacency Graph</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --ink:#0f0f0d;--paper:#f5f3ee;--surface:#ffffff;--mid:#e8e5de;
+  --muted:#8a8880;--accent:#1a6b3a;--warn:#b85c1a;
+  --mono:'DM Mono',monospace;--sans:'DM Sans',sans-serif;--r:8px;
+}
+body{font-family:var(--sans);background:var(--paper);color:var(--ink);min-height:100vh;padding:2rem 1.5rem 4rem}
+
+.header{max-width:1100px;margin:0 auto 1.75rem;display:flex;align-items:baseline;gap:.875rem;flex-wrap:wrap}
+.header h1{font-size:1.2rem;font-weight:500;letter-spacing:-.02em}
+.tag{font-family:var(--mono);font-size:.65rem;background:var(--ink);color:var(--paper);padding:.18rem .5rem;border-radius:3px}
+
+.input-area{max-width:1100px;margin:0 auto 1.25rem;background:var(--surface);border:1px solid var(--mid);border-radius:var(--r);overflow:hidden}
+.input-tabs{display:flex;border-bottom:1px solid var(--mid)}
+.tab{flex:1;padding:.6rem 1rem;font-family:var(--mono);font-size:.7rem;color:var(--muted);cursor:pointer;text-align:center;border:none;background:none;transition:background .15s;letter-spacing:.04em}
+.tab:hover{background:var(--paper)}
+.tab.active{color:var(--ink);background:var(--paper);font-weight:500;border-bottom:2px solid var(--ink);margin-bottom:-1px}
+.tab-panel{display:none;padding:1.25rem 1.5rem}
+.tab-panel.active{display:block}
+
+.drop-zone{border:1.5px dashed var(--mid);border-radius:var(--r);padding:1.25rem;text-align:center;cursor:pointer;transition:border-color .2s,background .2s}
+.drop-zone:hover,.drop-zone.drag{border-color:var(--ink);background:var(--paper)}
+.drop-zone p{font-size:.83rem;color:var(--muted);line-height:1.6;margin-bottom:.5rem}
+.drop-zone strong{color:var(--ink)}
+#fileInput{display:none}
+
+.url-form{display:flex;flex-direction:column;gap:.75rem}
+.url-input-row{display:flex;gap:.5rem}
+.url-input-row input{flex:1;font-family:var(--mono);font-size:.76rem;padding:.5rem .75rem;border:1px solid var(--mid);border-radius:6px;background:var(--paper);color:var(--ink);outline:none;transition:border-color .15s}
+.url-input-row input:focus{border-color:var(--ink)}
+.url-input-row input::placeholder{color:var(--muted)}
+.url-presets{display:flex;gap:.5rem;flex-wrap:wrap}
+.preset-btn{font-family:var(--mono);font-size:.65rem;padding:.25rem .6rem;border:1px solid var(--mid);border-radius:4px;background:var(--paper);color:var(--muted);cursor:pointer;transition:all .15s;white-space:nowrap}
+.preset-btn:hover{border-color:var(--ink);color:var(--ink)}
+
+.btn{padding:.44rem .95rem;font-family:var(--sans);font-size:.78rem;font-weight:500;border:1px solid var(--ink);border-radius:6px;background:var(--ink);color:var(--paper);cursor:pointer;white-space:nowrap;transition:opacity .15s}
+.btn:hover{opacity:.82}
+.btn.ghost{background:transparent;color:var(--ink)}
+.btn.ghost:hover{background:var(--mid)}
+
+.ctrl-bar{max-width:1100px;margin:0 auto 1.25rem;display:flex;align-items:center;gap:1.25rem;flex-wrap:wrap;padding:.75rem 1.25rem;background:var(--surface);border:1px solid var(--mid);border-radius:var(--r)}
+.ctrl{display:flex;align-items:center;gap:.5rem}
+.ctrl label{font-family:var(--mono);font-size:.68rem;color:var(--muted);white-space:nowrap}
+input[type=range]{width:88px;accent-color:var(--ink);cursor:pointer}
+.val{font-family:var(--mono);font-size:.74rem;font-weight:500;min-width:28px}
+.auto-badge{font-family:var(--mono);font-size:.57rem;background:var(--ink);color:var(--paper);padding:.1rem .36rem;border-radius:2px;cursor:default}
+.sep{width:1px;height:20px;background:var(--mid);flex-shrink:0}
+.spinner{display:none;font-family:var(--mono);font-size:.72rem;color:var(--muted)}
+.spinner.on{display:inline}
+
+.main{max-width:1100px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+@media(max-width:680px){.main{grid-template-columns:1fr}}
+.panel{background:var(--surface);border:1px solid var(--mid);border-radius:var(--r);overflow:hidden}
+.ph{padding:.5rem 1rem;border-bottom:1px solid var(--mid);display:flex;justify-content:space-between;align-items:center}
+.pt{font-family:var(--mono);font-size:.65rem;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.pb-badge{font-family:var(--mono);font-size:.65rem;font-weight:500}
+.pb{padding:.6rem}
+canvas{display:block;width:100%;height:auto;image-rendering:pixelated;border-radius:4px}
+
+.stats{max-width:1100px;margin:1rem auto 0;display:grid;grid-template-columns:repeat(6,1fr);gap:.75rem}
+@media(max-width:680px){.stats{grid-template-columns:repeat(3,1fr)}}
+.stat{background:var(--surface);border:1px solid var(--mid);border-radius:var(--r);padding:.75rem 1rem;text-align:center}
+.sv{font-size:1.3rem;font-weight:300;letter-spacing:-.03em;line-height:1}
+.sl{font-family:var(--mono);font-size:.56rem;color:var(--muted);margin-top:.25rem;letter-spacing:.04em}
+
+.diff-row{max-width:1100px;margin:.75rem auto 0;background:var(--surface);border:1px solid var(--mid);border-radius:var(--r);padding:.875rem 1.25rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap}
+.diff-lbl{font-family:var(--mono);font-size:.68rem;color:var(--muted)}
+.badge{font-family:var(--mono);font-size:.74rem;font-weight:500;padding:.26rem .875rem;border-radius:4px}
+.easy{background:#e6f4ea;color:#1a5c2a}
+.medium{background:#fef3e2;color:#8a4a10}
+.hard{background:#fdecea;color:#8b1a1a}
+.track{flex:1;min-width:60px;height:4px;background:var(--mid);border-radius:2px;overflow:hidden}
+.fill{height:100%;border-radius:2px;background:var(--ink);transition:width .4s ease}
+.score-num{font-family:var(--mono);font-size:.74rem;font-weight:500;min-width:38px}
+.diff-note{font-family:var(--mono);font-size:.65rem;color:var(--muted);margin-left:auto}
+
+.breakdown{max-width:1100px;margin:.75rem auto 0;background:var(--surface);border:1px solid var(--mid);border-radius:var(--r);padding:.75rem 1.25rem;display:grid;grid-template-columns:repeat(4,1fr);gap:1rem}
+.bk-lbl{font-family:var(--mono);font-size:.59rem;color:var(--muted);margin-bottom:.28rem;line-height:1.4}
+.bk-track{height:3px;background:var(--mid);border-radius:2px;margin-bottom:.22rem}
+.bk-fill{height:100%;border-radius:2px;background:var(--ink);transition:width .4s}
+.bk-val{font-family:var(--mono);font-size:.7rem;font-weight:500}
+
+.edge-section{max-width:1100px;margin:.75rem auto 0;background:var(--surface);border:1px solid var(--mid);border-radius:var(--r);overflow:hidden}
+table{width:100%;font-family:var(--mono);font-size:.68rem;border-collapse:collapse}
+th{text-align:left;padding:.36rem 1rem;background:var(--paper);color:var(--muted);font-weight:400;letter-spacing:.04em;border-bottom:1px solid var(--mid)}
+td{padding:.28rem 1rem;border-bottom:.5px solid var(--mid)}
+tr:last-child td{border-bottom:none}
+.swatch{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px;vertical-align:middle;border:.5px solid rgba(0,0,0,.12)}
+.w-low{color:var(--accent)}.w-mid{color:var(--warn)}.w-hi{color:var(--muted)}
+
+.log{max-width:1100px;margin:.75rem auto 0;font-family:var(--mono);font-size:.68rem;color:var(--muted);padding:.5rem 1rem;background:var(--surface);border:1px solid var(--mid);border-radius:var(--r)}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Region Adjacency Graph</h1>
+  <span class="tag">RAG v6 — Lab ΔE76 edges, pixel-exact</span>
+</div>
+
+<div class="input-area">
+  <div class="input-tabs">
+    <button class="tab active" onclick="switchTab('upload')">Upload file</button>
+    <button class="tab" onclick="switchTab('url')">URL ảnh</button>
+  </div>
+  <div class="tab-panel active" id="tab-upload">
+    <div class="drop-zone" id="dz" onclick="dzClick(event)">
+      <p><strong>Kéo thả ảnh vào đây</strong> hoặc click để chọn file</p>
+      <p>PNG / JPG / WebP — pixel art và ảnh tự nhiên, có hoặc không có transparent</p>
+      <button class="btn ghost" style="margin-top:.75rem" onclick="event.stopPropagation();document.getElementById('fileInput').click()">Chọn file</button>
+    </div>
+    <input type="file" id="fileInput" accept="image/*" onchange="loadFile(event)">
+  </div>
+  <div class="tab-panel" id="tab-url">
+    <div class="url-form">
+      <div class="url-input-row">
+        <input id="urlIn" type="text" placeholder="https://... dán URL ảnh vào đây rồi bấm Load">
+        <button class="btn" onclick="loadUrl()">Load</button>
+      </div>
+      <div class="url-presets">
+        <span style="font-family:var(--mono);font-size:.65rem;color:var(--muted);align-self:center">Thử nhanh:</span>
+        <button class="preset-btn" onclick="loadPreset('https://upload.wikimedia.org/wikipedia/en/a/a9/Example.jpg')">Wikipedia example</button>
+        <button class="preset-btn" onclick="loadPreset('https://www.piskelapp.com/img/favicon.png')">Pixel art</button>
+        <button class="preset-btn" onclick="loadPreset('https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/PNG_transparency_demonstration_1.png/280px-PNG_transparency_demonstration_1.png')">Transparent PNG</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!--
+  Slider "Ngưỡng gộp" = merge_thresh trong Lab ΔE units (0–100 scale).
+  Range 1–30 ΔE hợp lý: ΔE<5 = gần như identical, ΔE>20 = clearly different.
+-->
+<div class="ctrl-bar">
+  <div class="ctrl">
+    <label>Số màu (n_colors)</label>
+    <input type="range" id="nColorsSl" min="4" max="64" value="16" step="2" oninput="onNColorsInput(this)">
+    <span class="val" id="nColorsV">16</span>
+    <span class="auto-badge" id="nColorsBadge">AUTO</span>
+  </div>
+  <div class="sep"></div>
+  <div class="ctrl">
+    <label>Dung sai màu (color_tol)</label>
+    <input type="range" id="tolSl" min="1" max="30" value="8" step="1" oninput="onTolInput(this)">
+    <span class="val" id="tolV">8</span>
+    <span class="auto-badge" id="tolBadge">AUTO</span>
+  </div>
+  <div class="sep"></div>
+  <div class="ctrl">
+    <!-- FIX: range 1–30 ΔE (trước 5–120 RGB) -->
+    <label>Ngưỡng gộp ΔE (merge_thresh)</label>
+    <input type="range" id="thrSl" min="1" max="30" value="10" step="1" oninput="onThrInput(this)">
+    <span class="val" id="thrV">10</span>
+    <span class="auto-badge" id="thrBadge">AUTO</span>
+  </div>
+  <div class="sep"></div>
+  <div class="ctrl">
+    <label>Độ rõ edges</label>
+    <input type="range" id="opSl" min="0" max="100" value="75" step="5" oninput="onOpInput(this)">
+    <span class="val" id="opV">75%</span>
+  </div>
+  <div class="sep"></div>
+  <button class="btn ghost" style="font-size:.74rem" onclick="reanalyze()">Re-analyze ↻</button>
+  <button class="btn ghost" style="font-size:.74rem" onclick="resetAuto()">Reset AUTO ↺</button>
+  <span class="spinner" id="spin">analyzing...</span>
+</div>
+
+<div class="main">
+  <div class="panel">
+    <div class="ph"><span class="pt">Original image</span><span class="pb-badge" id="imgSz">—</span></div>
+    <div class="pb"><canvas id="origC"></canvas></div>
+  </div>
+  <div class="panel">
+    <div class="ph"><span class="pt">Segmented regions</span><span class="pb-badge" id="segCnt">—</span></div>
+    <div class="pb"><canvas id="segC"></canvas></div>
+  </div>
+  <div class="panel">
+    <div class="ph"><span class="pt">RAG — all edges</span><span class="pb-badge" id="edgeCnt">—</span></div>
+    <div class="pb"><canvas id="ragC"></canvas></div>
+  </div>
+  <div class="panel">
+    <div class="ph"><span class="pt">RAG — merge candidates (ΔE &lt; threshold)</span><span class="pb-badge" id="mrgCnt">—</span></div>
+    <div class="pb"><canvas id="mrgC"></canvas></div>
+  </div>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="sv" id="sR">—</div><div class="sl">REGIONS</div></div>
+  <div class="stat"><div class="sv" id="sC">—</div><div class="sl">DISTINCT COLORS</div></div>
+  <div class="stat"><div class="sv" id="sE">—</div><div class="sl">EDGES</div></div>
+  <div class="stat"><div class="sv" id="sP">—</div><div class="sl">MEDIAN ΔE</div></div>
+  <div class="stat"><div class="sv" id="sA">—</div><div class="sl">HIGH / MED AMBIG</div></div>
+  <div class="stat"><div class="sv" id="sD">—</div><div class="sl">AVG EDGES/NODE</div></div>
+</div>
+
+<div class="diff-row">
+  <span class="diff-lbl">LEVEL DIFFICULTY</span>
+  <span id="dBadge" class="badge medium">—</span>
+  <div class="track"><div class="fill" id="sFill" style="width:0%"></div></div>
+  <span class="score-num" id="sNum">—</span>
+  <span class="diff-note" id="dNote">—</span>
+</div>
+
+<div class="breakdown">
+  <div><div class="bk-lbl">REGION DENSITY (×0.20)</div><div class="bk-track"><div class="bk-fill" id="bR" style="width:0%"></div></div><div class="bk-val" id="bRv">—</div></div>
+  <div><div class="bk-lbl">EDGE AMBIGUITY (×0.40)</div><div class="bk-track"><div class="bk-fill" id="bA" style="width:0%"></div></div><div class="bk-val" id="bAv">—</div></div>
+  <div><div class="bk-lbl">LOW CONTRAST (×0.25)</div><div class="bk-track"><div class="bk-fill" id="bL" style="width:0%"></div></div><div class="bk-val" id="bLv">—</div></div>
+  <div><div class="bk-lbl">FRAGMENTATION (×0.15)</div><div class="bk-track"><div class="bk-fill" id="bF" style="width:0%"></div></div><div class="bk-val" id="bFv">—</div></div>
+</div>
+
+<div class="edge-section">
+  <div class="ph"><span class="pt">Top edges — ascending ΔE (lowest = most similar)</span></div>
+  <div style="max-height:185px;overflow-y:auto">
+    <table><thead><tr><th>Region A</th><th>Region B</th><th>Color A</th><th>Color B</th><th>ΔE76</th><th>Status</th></tr></thead>
+    <tbody id="edgeBody"></tbody></table>
+  </div>
+</div>
+
+<div class="log" id="logLine">Chờ ảnh — upload file hoặc nhập URL bên trên.</div>
+
+<script>
+const API = 'https://connected-abilities-fame-command.trycloudflare.com/analyze';
+
+let currentBlob = null;
+let lastData    = null;
+let edgeOp      = 0.75;
+let threshold   = 10;
+
+const badgeAuto = { nColors: true, tol: true, thr: true };
+
+const $ = id => document.getElementById(id);
+function log(m) { $('logLine').textContent = m; }
+function spin(on) { $('spin').classList.toggle('on', on); }
+
+// ── Tabs ──────────────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t, i) => {
+    t.classList.toggle('active', (i === 0 && name === 'upload') || (i === 1 && name === 'url'));
+  });
+  $('tab-upload').classList.toggle('active', name === 'upload');
+  $('tab-url').classList.toggle('active', name === 'url');
+}
+
+// ── Drop zone ──────────────────────────────────────────────────────────────
+function dzClick(e) {
+  const t = e.target;
+  if (t.id === 'dz' || t.tagName === 'P' || t.tagName === 'STRONG')
+    $('fileInput').click();
+}
+const dz = $('dz');
+dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('drag'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('drag');
+  const f = e.dataTransfer.files[0];
+  if (f) handleBlob(f);
+});
+function loadFile(e) {
+  const f = e.target.files[0];
+  if (f) handleBlob(f);
+}
+
+// ── URL loading ───────────────────────────────────────────────────────────
+function loadUrl() {
+  const url = $('urlIn').value.trim();
+  if (!url) return;
+  fetchUrl(url);
+}
+function loadPreset(url) {
+  $('urlIn').value = url;
+  fetchUrl(url);
+}
+function fetchUrl(url) {
+  log('Đang tải ảnh từ URL...');
+  const proxyUrl = `https://images.weserv.nl/?url=${encodeURIComponent(url)}&output=png`;
+  fetch(proxyUrl)
+    .then(r => { if (!r.ok) throw new Error('Proxy HTTP ' + r.status); return r.blob(); })
+    .then(blob => new Promise((res, rej) => {
+      const objUrl = URL.createObjectURL(blob);
+      const img = new Image();
+      img.onload  = () => { URL.revokeObjectURL(objUrl); res(blob); };
+      img.onerror = () => { URL.revokeObjectURL(objUrl); rej(new Error('Invalid image')); };
+      img.src = objUrl;
+    }))
+    .then(blob => handleBlob(blob))
+    .catch(err => log('❌ Không tải được ảnh: ' + err.message));
+}
+
+function handleBlob(blob) {
+  currentBlob = blob;
+  drawOriginal(blob);
+  sendToServer();
+}
+
+// ── Vẽ ảnh gốc ───────────────────────────────────────────────────────────
+function drawOriginal(blob) {
+  const url = URL.createObjectURL(blob);
+  const img = new Image();
+  img.onload = () => {
+    let w = img.naturalWidth, h = img.naturalHeight;
+    const mx = 200;
+    if (w > mx || h > mx) { const s = Math.min(mx/w, mx/h); w = Math.round(w*s); h = Math.round(h*s); }
+    const c = $('origC'); c.width = w; c.height = h;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(img, 0, 0, w, h);
+    $('imgSz').textContent = `${w}×${h}px`;
+    URL.revokeObjectURL(url);
+  };
+  img.src = url;
+}
+
+// ── Gửi lên Flask ─────────────────────────────────────────────────────────
+function sendToServer() {
+  if (!currentBlob) return;
+  const t0 = performance.now();
+  spin(true);
+  log('Đang phân tích...');
+
+  const fd = new FormData();
+  fd.append('image',        currentBlob, 'image.png');
+  fd.append('n_colors',     $('nColorsSl').value);
+  fd.append('color_tol',    $('tolSl').value);
+  fd.append('merge_thresh', $('thrSl').value);
+
+  fetch(API, { method: 'POST', body: fd })
+    .then(r => { if (!r.ok) return r.json().then(e => { throw e; }); return r.json(); })
+    .then(data => {
+      spin(false);
+      lastData  = data;
+      threshold = +$('thrSl').value;
+      edgeOp    = +$('opSl').value / 100;
+
+      if (badgeAuto.nColors) {
+        $('nColorsSl').value      = data.auto.n_colors;
+        $('nColorsV').textContent = data.auto.n_colors;
+      }
+      if (badgeAuto.tol) {
+        $('tolSl').value      = data.auto.color_tol;
+        $('tolV').textContent = data.auto.color_tol;
+      }
+      if (badgeAuto.thr) {
+        $('thrSl').value      = data.auto.merge_thresh;
+        $('thrV').textContent = data.auto.merge_thresh;
+        threshold             = data.auto.merge_thresh;
+      }
+
+      renderAll(data, Math.round(performance.now() - t0));
+    })
+    .catch(err => {
+      spin(false);
+      log('❌ Lỗi: ' + (err.error || err.message || JSON.stringify(err)) +
+          ' — Flask đang chạy chưa? (python app.py)');
+    });
+}
+
+function reanalyze() { sendToServer(); }
+
+function resetAuto() {
+  badgeAuto.nColors = true;
+  badgeAuto.tol     = true;
+  badgeAuto.thr     = true;
+  updateBadgeUI();
+  sendToServer();
+}
+
+function updateBadgeUI() {
+  $('nColorsBadge').style.display = badgeAuto.nColors ? '' : 'none';
+  $('tolBadge').style.display     = badgeAuto.tol     ? '' : 'none';
+  $('thrBadge').style.display     = badgeAuto.thr     ? '' : 'none';
+}
+
+// ── Render ────────────────────────────────────────────────────────────────
+function renderAll(data, ms) {
+  drawSegmented(data);
+  drawRAG('ragC', data, false);
+  drawRAG('mrgC', data, true);
+  updateStats(data, ms);
+}
+
+function drawSegmented(data) {
+  const img = new Image();
+  img.onload = () => {
+    const c = $('segC'); c.width = data.width; c.height = data.height;
+    const ctx = c.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+
+    const visNodes  = data.nodes.filter(n => !n.isBg && !n.isTiny);
+    const tinyNodes = data.nodes.filter(n => !n.isBg && n.isTiny);
+    const fs = Math.max(7, Math.min(12, data.width / (Math.sqrt(visNodes.length) * 2.5)));
+
+    // Significant regions: số liên tục 1,2,3,...
+    ctx.font = `bold ${fs}px monospace`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    visNodes.forEach((n, idx) => {
+      const label = String(idx + 1);
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.fillText(label, n.cx + .5, n.cy + .5);
+      ctx.fillStyle = 'rgba(255,255,255,0.92)';
+      ctx.fillText(label, n.cx, n.cy);
+    });
+
+    // Tiny regions: dấu "·" nhỏ — visible nhưng không lấn át
+    ctx.font = `bold ${Math.max(5, fs - 3)}px monospace`;
+    tinyNodes.forEach(n => {
+      ctx.fillStyle = 'rgba(0,0,0,0.4)';
+      ctx.fillText('·', n.cx + .5, n.cy + .5);
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.fillText('·', n.cx, n.cy);
+    });
+
+    const sig  = visNodes.length;
+    const tiny = tinyNodes.length;
+    $('segCnt').textContent = `${sig} regions` + (tiny ? ` +${tiny} tiny` : '');
+  };
+  img.src = 'data:image/png;base64,' + data.label_png;
+}
+
+function drawRAG(canvasId, data, onlyMerge) {
+  threshold = +$('thrSl').value;
+  edgeOp    = +$('opSl').value / 100;
+
+  const c = $(canvasId); c.width = data.width; c.height = data.height;
+  const ctx = c.getContext('2d');
+
+  ctx.drawImage($('origC'), 0, 0);
+  ctx.fillStyle = 'rgba(245,243,238,0.52)';
+  ctx.fillRect(0, 0, data.width, data.height);
+
+  const nodeMap = {};
+  for (const n of data.nodes) nodeMap[n.id] = n;
+
+  // FIX [5 frontend]: filter cả isTiny khỏi liveEdges
+  // Tránh edge lines nối vào vị trí không có dot
+  const liveEdges = data.edges.filter(e => {
+    const na = nodeMap[e.a], nb = nodeMap[e.b];
+    return na && nb && !na.isBg && !nb.isBg && !na.isTiny && !nb.isTiny;
+  });
+
+  let mrgCnt = 0;
+  for (const e of liveEdges) {
+    const isMerge = e.w < threshold;
+    if (onlyMerge && !isMerge) continue;
+    if (isMerge) mrgCnt++;
+
+    const na = nodeMap[e.a], nb = nodeMap[e.b];
+    ctx.beginPath();
+    ctx.moveTo(na.cx, na.cy);
+    ctx.lineTo(nb.cx, nb.cy);
+
+    if (isMerge) {
+      const t = e.w / threshold;
+      // ΔE scale: xanh lá = merge candidates, đỏ = gần threshold
+      ctx.strokeStyle = `rgba(${Math.round(30 + t*190)},${Math.round(160 - t*80)},40,${edgeOp})`;
+      ctx.lineWidth   = Math.max(0.5, (1 - t) * 2.5 + 0.5);
+    } else {
+      ctx.strokeStyle = `rgba(100,80,60,${edgeOp * 0.25})`;
+      ctx.lineWidth   = 0.4;
+    }
+    ctx.stroke();
+
+    // ΔE label cho merge edges rất gần (ΔE < threshold * 0.5)
+    if (isMerge && e.w < threshold * 0.5 && data.width > 80) {
+      const mx = (na.cx + nb.cx) / 2, my = (na.cy + nb.cy) / 2;
+      ctx.font = `${Math.max(5, data.width / 80)}px monospace`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillText(e.w.toFixed(1), mx, my);
+    }
+  }
+
+  // Node dots — chỉ non-bg, non-tiny
+  const nr = Math.max(2.5, Math.min(7, data.width / 24));
+  for (const n of data.nodes) {
+    if (n.isBg || n.isTiny) continue;
+    ctx.beginPath();
+    ctx.arc(n.cx, n.cy, nr, 0, Math.PI * 2);
+    ctx.fillStyle   = `rgb(${Math.round(n.r)},${Math.round(n.g)},${Math.round(n.b)})`;
+    ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+    ctx.lineWidth   = 0.8;
+    ctx.fill(); ctx.stroke();
+  }
+
+  $(canvasId === 'ragC' ? 'edgeCnt' : 'mrgCnt').textContent =
+    canvasId === 'ragC' ? liveEdges.length + ' edges' : mrgCnt + ' candidates';
+}
+
+function updateStats(data, ms) {
+  const diff    = data.difficulty;
+  const nodeMap = {};
+  for (const n of data.nodes) nodeMap[n.id] = n;
+
+  const sigNodes = data.nodes.filter(n => !n.isTiny && !n.isBg);
+  const sigIds   = new Set(sigNodes.map(n => n.id));
+  const sigEdges = data.edges.filter(e => sigIds.has(e.a) && sigIds.has(e.b));
+  const density  = sigNodes.length ? (sigEdges.length / sigNodes.length).toFixed(1) : '0';
+
+  $('sR').textContent = sigNodes.length;
+  $('sC').textContent = diff.distinctColors;
+  $('sE').textContent = sigEdges.length;
+  $('sP').textContent = diff.p50.toFixed(1);
+  $('sA').textContent = Math.round(diff.highAmb * 100) + '% / ' + Math.round(diff.medAmb * 100) + '%';
+  $('sD').textContent = density;
+
+  const pct = Math.min(Math.round(diff.score / 0.80 * 100), 100);
+  $('sFill').style.width = pct + '%';
+  $('sNum').textContent  = diff.score.toFixed(3);
+
+  const badge = $('dBadge');
+  badge.textContent = diff.label;
+  badge.className   = 'badge ' + diff.label.toLowerCase();
+  $('dNote').textContent = {
+    Easy:   'Ít vùng, màu rõ ràng, ít phân mảnh',
+    Medium: 'Một số cặp màu gần nhau hoặc phân mảnh vừa',
+    Hard:   'Nhiều vùng tương đồng hoặc phân mảnh cao',
+  }[diff.label] || '';
+
+  $('bR').style.width  = Math.round(diff.normR * 100) + '%';        $('bRv').textContent = diff.normR.toFixed(3);
+  $('bA').style.width  = Math.round(diff.ambiguity * 100) + '%';    $('bAv').textContent = diff.ambiguity.toFixed(3);
+  $('bL').style.width  = Math.round(diff.lowContrast * 100) + '%';  $('bLv').textContent = diff.lowContrast.toFixed(3);
+  $('bF').style.width  = Math.round(diff.fragmentation * 100) + '%';$('bFv').textContent = diff.fragmentation.toFixed(3);
+
+  // Edge table: display index liên tục (1,2,3...) khớp với canvas segmented
+  const visNodes   = data.nodes.filter(n => !n.isBg && !n.isTiny);
+  const displayIdx = {};
+  visNodes.forEach((n, i) => { displayIdx[n.id] = i + 1; });
+
+  // FIX [5 frontend]: chỉ show edges của non-tiny sig nodes
+  const tableEdges = sigEdges.filter(e => {
+    const na = nodeMap[e.a], nb = nodeMap[e.b];
+    return na && nb && !na.isTiny && !nb.isTiny;
+  });
+
+  $('edgeBody').innerHTML = tableEdges.slice(0, 20).map(e => {
+    const na = nodeMap[e.a], nb = nodeMap[e.b];
+    if (!na || !nb) return '';
+    // ΔE thresholds: <10 = hard to distinguish, <threshold = merge candidate
+    const cls    = e.w < 10 ? 'w-low' : e.w < threshold ? 'w-mid' : 'w-hi';
+    const status = e.w < threshold
+      ? '<span class="w-low">merge candidate</span>'
+      : '<span class="w-hi">boundary</span>';
+    const dA = displayIdx[e.a] ?? e.a;
+    const dB = displayIdx[e.b] ?? e.b;
+    return `<tr>
+      <td><span class="swatch" style="background:rgb(${Math.round(na.r)},${Math.round(na.g)},${Math.round(na.b)})"></span>R${dA}</td>
+      <td><span class="swatch" style="background:rgb(${Math.round(nb.r)},${Math.round(nb.g)},${Math.round(nb.b)})"></span>R${dB}</td>
+      <td>rgb(${Math.round(na.r)},${Math.round(na.g)},${Math.round(na.b)})</td>
+      <td>rgb(${Math.round(nb.r)},${Math.round(nb.g)},${Math.round(nb.b)})</td>
+      <td class="${cls}">${e.w.toFixed(1)}</td>
+      <td>${status}</td>
+    </tr>`;
+  }).join('');
+
+  if (ms > 0) log(`✓ ${ms}ms — ${sigNodes.length} regions, ${diff.distinctColors} colors, ${sigEdges.length} edges, p50=ΔE${diff.p50.toFixed(1)}, score=${diff.score.toFixed(3)}`);
+}
+
+// ── Slider handlers ───────────────────────────────────────────────────────
+function onNColorsInput(el) {
+  $('nColorsV').textContent = el.value;
+  badgeAuto.nColors = false;
+  updateBadgeUI();
+}
+function onTolInput(el) {
+  $('tolV').textContent = el.value;
+  badgeAuto.tol = false;
+  updateBadgeUI();
+}
+function onThrInput(el) {
+  threshold = +el.value;
+  $('thrV').textContent = el.value;
+  badgeAuto.thr = false;
+  updateBadgeUI();
+  if (lastData) {
+    drawRAG('ragC', lastData, false);
+    drawRAG('mrgC', lastData, true);
+    updateStats(lastData, 0);
+  }
+}
+function onOpInput(el) {
+  edgeOp = +el.value / 100;
+  $('opV').textContent = el.value + '%';
+  if (lastData) {
+    drawRAG('ragC', lastData, false);
+    drawRAG('mrgC', lastData, true);
+  }
+}
+
+updateBadgeUI();
+</script>
+</body>
+</html>
